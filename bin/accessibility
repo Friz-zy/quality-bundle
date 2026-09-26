@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec uv run --project "$KIT" --extra accessibility pytest -m accessibility "${@:-tests/e2e/accessibility}"

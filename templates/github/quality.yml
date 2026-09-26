@@ -1,0 +1,29 @@
+name: Quality
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  functional:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: astral-sh/setup-uv@v6
+      - name: Build and start SUT
+        run: |
+          # Replace with project-specific build/start commands.
+          echo "Export E2E_BASE_URL/E2E_IMAGE and E2E_CLI as appropriate."
+      - name: Show plan
+        run: ./tools/quality/bin/quality plan
+      - name: Run discovered quality suites
+        run: ./tools/quality/bin/quality run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-artifacts
+          path: artifacts/quality
+          if-no-files-found: ignore

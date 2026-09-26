@@ -1,0 +1,18 @@
+quality:
+  stage: test
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm
+  before_script:
+    - git submodule sync --recursive
+    - git submodule update --init --recursive
+  script:
+    - |
+      # Build/start the SUT and configure E2E_BASE_URL/E2E_IMAGE and E2E_CLI here.
+      ./tools/quality/bin/quality plan
+      ./tools/quality/bin/quality run
+  artifacts:
+    when: always
+    paths:
+      - artifacts/quality/
+    reports:
+      junit:
+        - artifacts/quality/*-junit.xml

@@ -1,0 +1,49 @@
+services:
+  e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        QUALITY_EXTRAS: all
+    image: quality-bundle:local
+    user: "1000:1000"
+    working_dir: /workspace
+    volumes:
+      # In a target repository this compose file normally lives under tools/quality.
+      # Override E2E_WORKSPACE when the project root is elsewhere.
+      - ${E2E_WORKSPACE:-.}:/workspace
+      # Persist nested Podman image/layer storage between runs.
+      - podman-storage:/home/e2e/.local/share/containers
+    environment:
+      QUALITY_CONFIG: ${QUALITY_CONFIG:-/workspace/quality.toml}
+      E2E_PODMAN_MODE: ${E2E_PODMAN_MODE:-restricted}
+      E2E_CONTAINER_RUNTIME: podman
+      E2E_PODMAN_PROBE: ${E2E_PODMAN_PROBE:-0}
+      # Testcontainers talks to the nested rootless Podman service.
+      DOCKER_HOST: unix:///tmp/podman-run-1000/podman/podman.sock
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+    # No privileged mode, host Docker socket, /dev/fuse, or /dev/net/tun.
+    command: ["quality", "run"]
+
+  shell:
+    profiles: ["debug"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        QUALITY_EXTRAS: all
+    image: quality-bundle:local
+    user: "1000:1000"
+    working_dir: /workspace
+    volumes:
+      - ${E2E_WORKSPACE:-.}:/workspace
+      - podman-storage:/home/e2e/.local/share/containers
+    environment:
+      QUALITY_CONFIG: ${QUALITY_CONFIG:-/workspace/quality.toml}
+      E2E_PODMAN_MODE: ${E2E_PODMAN_MODE:-restricted}
+      DOCKER_HOST: unix:///tmp/podman-run-1000/podman/podman.sock
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+    command: ["bash"]
+
+volumes:
+  podman-storage:

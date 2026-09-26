@@ -1,0 +1,28 @@
+.e2e_base:
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm
+  before_script:
+    - git submodule sync --recursive
+    - git submodule update --init --recursive
+  artifacts:
+    when: always
+    paths: [artifacts/quality/]
+    reports:
+      junit:
+        - artifacts/quality/*junit*.xml
+
+e2e:
+  extends: .e2e_base
+  stage: test
+  script:
+    - |
+      # Build/start the SUT and export E2E_BASE_URL/E2E_IMAGE and E2E_CLI before this line.
+      ./tools/quality/bin/quality test
+
+e2e-ui:
+  extends: .e2e_base
+  stage: test
+  rules:
+    - when: manual
+  script:
+    - ./tools/quality/bin/install-ui chromium
+    - QUALITY_EXTRAS=ui ./tools/quality/bin/quality ui -- --browser chromium --tracing retain-on-failure

@@ -1,0 +1,46 @@
+[app]
+cli = "./bin/app"
+base_url = "http://127.0.0.1:8080"
+health_path = "/health"
+startup_timeout = 30
+
+[container]
+# If base_url is absent, pytest can start the SUT image through Testcontainers.
+image = "ghcr.io/example/app:e2e"
+port = 8080
+
+[paths]
+tests = "tests/e2e"
+artifacts = "artifacts/quality"
+hurl = "tests/e2e/hurl"
+openapi = "./openapi.yaml"
+
+[quality]
+auto_discover = true
+fail_fast = false
+parallel = false
+# default_suites = ["cli", "api", "workflow", "hurl", "schema"]
+exclude_suites = []
+junit = true
+json_summary = true
+
+
+[performance]
+backend = "locust"
+users = 50
+spawn_rate = 5
+duration = "1m"
+warmup = "10s"
+# p50_ms = 250
+p95_ms = 500
+p99_ms = 1000
+failure_rate = 0.01
+# min_rps = 10
+
+[compatibility]
+# Versions are identifiers. Project CI maps them to public artifacts with environment variables.
+versions = ["1.4.0", "1.5.0", "current"]
+current = "current"
+
+[reliability]
+toxiproxy_image = "ghcr.io/shopify/toxiproxy:2.12.0"

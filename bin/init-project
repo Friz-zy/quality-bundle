@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TARGET="${1:-.}"
+mkdir -p "$TARGET/tests/e2e"
+if [[ ! -f "$TARGET/quality.toml" ]]; then
+  cp "$KIT/quality.example.toml" "$TARGET/quality.toml"
+fi
+echo "Available templates:"
+find "$KIT/templates/tests" -mindepth 1 -maxdepth 1 -type d -printf '  %f\n' | sort
+echo
+echo "Copy only the suites the project uses, for example:"
+echo "  cp -R $KIT/templates/tests/api $TARGET/tests/e2e/"
+echo "  cp -R $KIT/templates/tests/performance $TARGET/tests/e2e/"

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMPOSE="${E2E_COMPOSE_FILE:-$KIT/docker-compose.yml}"
+ENGINE="${E2E_COMPOSE_ENGINE:-docker}"
+
+case "$ENGINE" in
+  docker)
+    exec docker compose -f "$COMPOSE" run --rm e2e "$@"
+    ;;
+  podman)
+    exec podman compose -f "$COMPOSE" run --rm e2e "$@"
+    ;;
+  *)
+    echo "error: E2E_COMPOSE_ENGINE must be docker or podman" >&2
+    exit 2
+    ;;
+esac

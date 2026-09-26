@@ -1,0 +1,48 @@
+name: Extended E2E
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: astral-sh/setup-uv@v6
+      - name: Start target
+        run: echo "Start the SUT and export E2E_BASE_URL in this project"
+      - run: QUALITY_EXTRAS=performance ./tools/quality/bin/performance
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-artifacts
+          path: artifacts/quality
+
+  accessibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: astral-sh/setup-uv@v6
+      - run: ./tools/quality/bin/install-ui chromium
+      - name: Start target
+        run: echo "Start the SUT and export E2E_BASE_URL in this project"
+      - run: ./tools/quality/bin/accessibility
+
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - name: Start target
+        run: echo "Start the SUT and export E2E_BASE_URL in this project"
+      - run: ./tools/quality/bin/security
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-report
+          path: artifacts/quality/zap

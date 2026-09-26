@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CONFIG="${QUALITY_CONFIG:-e2e.toml}"
+LOCUSTFILE="${E2E_PERFORMANCE_FILE:-tests/e2e/performance/locustfile.py}"
+: "${E2E_BASE_URL:?E2E_BASE_URL is required}"
+
+read_cfg() {
+  uv run --project "$KIT" --extra performance python - "$CONFIG" "$1" <<'PY'
+import sys
+from quality_bundle.config import load_config
+c=load_config(sys.argv[1]).performance
+print(getattr(c,sys.argv[2]))
+PY
+}
+BACKEND="${E2E_PERFORMANCE_BACKEND:-$(read_cfg backend)}"
+if [[ "$BACKEND" != "locust" ]]; then
+  echo "error: default harness supports locust; use a project-specific external backend for '$BACKEND'" >&2
+  exit 2
+fi
+USERS="${E2E_PERFORMANCE_USERS:-$(read_cfg users)}"
+SPAWN="${E2E_PERFORMANCE_SPAWN_RATE:-$(read_cfg spawn_rate)}"
+DURATION="${E2E_PERFORMANCE_DURATION:-$(read_cfg duration)}"
+ARTIFACTS="${QUALITY_ARTIFACTS_DIR:-artifacts/quality}"
+mkdir -p "$ARTIFACTS"
+
+uv run --project "$KIT" --extra performance locust \
+  -f "$LOCUSTFILE" \
+  --headless \
+  --host "$E2E_BASE_URL" \
+  --users "$USERS" \
+  --spawn-rate "$SPAWN" \
+  --run-time "$DURATION" \
+  --csv "$ARTIFACTS/locust" \
+  --csv-full-history
+
+uv run --project "$KIT" --extra performance python - "$CONFIG" "$ARTIFACTS" <<'PY'
+import sys
+from pathlib import Path
+from quality_bundle.config import load_config
+from quality_bundle.performance import read_locust_stats,evaluate,write_reports
+cfg=load_config(sys.argv[1])
+art=Path(sys.argv[2])
+result=read_locust_stats(art/"locust")
+failures=evaluate(result,cfg.performance)
+write_reports(result,failures,art)
+print(f"RPS={result.rps:.2f} p50={result.p50_ms:.1f}ms p95={result.p95_ms:.1f}ms p99={result.p99_ms:.1f}ms failures={result.failure_rate:.4%}")
+if failures:
+    print("Threshold failures:")
+    for f in failures: print(" -",f)
+    raise SystemExit(1)
+PY

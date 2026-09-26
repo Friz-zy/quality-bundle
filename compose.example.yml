@@ -1,0 +1,22 @@
+services:
+  e2e:
+    build:
+      context: .
+      args:
+        QUALITY_EXTRAS: all
+    user: "1000:1000"
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - podman-storage:/home/e2e/.local/share/containers
+    environment:
+      QUALITY_CONFIG: /workspace/quality.toml
+      E2E_PODMAN_MODE: restricted
+    # Deliberately absent:
+    # privileged: true
+    # devices: /dev/fuse or /dev/net/tun
+    # /var/run/docker.sock
+    command: ["quality", "run"]
+
+volumes:
+  podman-storage:

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+echo "== Identity =="
+id
+echo
+echo "== Namespace =="
+grep -E 'Cap(Prm|Eff|Bnd)|NoNewPrivs|Seccomp' /proc/self/status || true
+echo
+echo "== Podman =="
+podman version || exit 1
+podman info --debug || exit 1
+echo
+echo "== Storage =="
+podman info --format 'driver={{.Store.GraphDriverName}} graphRoot={{.Store.GraphRoot}}' || true
+echo
+echo "== Rootless container probe =="
+if podman run --rm docker.io/library/busybox:latest sh -c 'echo nested-podman-ok; id'; then
+  echo "PASS: container run"
+else
+  echo "FAIL: container run"
+  exit 1
+fi
+echo
+echo "== Port publishing probe =="
+cid="$(podman run -d --rm -p 0:8080 docker.io/library/busybox:latest sh -c 'httpd -f -p 8080')"
+trap 'podman rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+podman port "$cid" 8080 || exit 1
+echo "PASS: port publishing"
+echo
+echo "== Volume probe =="
+podman run --rm -v e2e-doctor:/data docker.io/library/busybox:latest sh -c 'echo ok >/data/probe && cat /data/probe' || exit 1
+podman volume rm -f e2e-doctor >/dev/null || true
+echo "PASS: volume"

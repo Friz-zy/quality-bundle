@@ -1,0 +1,38 @@
+services:
+  e2e:
+    build:
+      context: ./tools/quality
+      dockerfile: Dockerfile
+      args:
+        QUALITY_EXTRAS: all
+    image: quality-bundle:local
+    user: "1000:1000"
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - e2e-podman-storage:/home/e2e/.local/share/containers
+    environment:
+      QUALITY_CONFIG: /workspace/quality.toml
+      E2E_PODMAN_MODE: ${E2E_PODMAN_MODE:-restricted}
+      E2E_CONTAINER_RUNTIME: podman
+      DOCKER_HOST: unix:///tmp/podman-run-1000/podman/podman.sock
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+    command: ["quality", "run"]
+
+  e2e-shell:
+    profiles: ["debug"]
+    image: quality-bundle:local
+    user: "1000:1000"
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - e2e-podman-storage:/home/e2e/.local/share/containers
+    environment:
+      QUALITY_CONFIG: /workspace/quality.toml
+      E2E_PODMAN_MODE: ${E2E_PODMAN_MODE:-restricted}
+      DOCKER_HOST: unix:///tmp/podman-run-1000/podman/podman.sock
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+    command: ["bash"]
+
+volumes:
+  e2e-podman-storage:

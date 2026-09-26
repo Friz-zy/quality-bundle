@@ -1,0 +1,19 @@
+# This template assumes a runner capable of launching the quality-bundle image itself.
+# It deliberately does not mount docker.sock, /dev/fuse, or /dev/net/tun and does
+# not request privileged mode. Executor-specific nested-user-namespace policy still applies.
+
+e2e:
+  stage: test
+  image:
+    name: registry.example.com/quality-bundle:latest
+    entrypoint: [""]
+  script:
+    - /opt/quality-bundle/bin/podman-doctor
+    - quality plan
+    - quality run
+  artifacts:
+    when: always
+    paths: [artifacts/quality/]
+    reports:
+      junit:
+        - artifacts/quality/*-junit.xml

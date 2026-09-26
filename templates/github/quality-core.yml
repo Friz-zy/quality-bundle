@@ -1,0 +1,40 @@
+name: E2E
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: astral-sh/setup-uv@v6
+      - name: Build or start SUT
+        run: |
+          # Replace this block with the target repository build/start command.
+          echo "Configure E2E_BASE_URL/E2E_IMAGE and E2E_CLI here"
+      - name: Run black-box tests
+        env:
+          QUALITY_EXTRAS: all
+        run: ./tools/quality/bin/quality test
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: artifacts/quality
+          if-no-files-found: ignore
+
+  ui:
+    if: ${{ false }} # Enable after UI tests are configured.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: astral-sh/setup-uv@v6
+      - run: ./tools/quality/bin/install-ui chromium
+      - run: QUALITY_EXTRAS=ui ./tools/quality/bin/quality ui -- --browser chromium --tracing retain-on-failure --screenshot only-on-failure

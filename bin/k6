@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+command -v k6 >/dev/null || { echo "error: k6 is not installed" >&2; exit 127; }
+exec k6 "$@"

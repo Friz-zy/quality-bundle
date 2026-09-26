@@ -1,0 +1,9 @@
+.PHONY: e2e e2e-cli e2e-api e2e-ui e2e-bdd e2e-mobile e2e-schema e2e-hurl
+e2e: ; ./tools/quality/bin/quality test
+e2e-cli: ; ./tools/quality/bin/quality cli
+e2e-api: ; ./tools/quality/bin/quality api
+e2e-ui: ; QUALITY_EXTRAS=ui ./tools/quality/bin/quality ui
+e2e-bdd: ; QUALITY_EXTRAS=bdd ./tools/quality/bin/quality bdd
+e2e-mobile: ; QUALITY_EXTRAS=mobile ./tools/quality/bin/quality mobile
+e2e-schema: ; QUALITY_EXTRAS=api ./tools/quality/bin/quality schema
+e2e-hurl: ; ./tools/quality/bin/quality hurl

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IMAGE="${E2E_ZAP_IMAGE:-ghcr.io/zaproxy/zaproxy:stable}"
+: "${E2E_BASE_URL:?E2E_BASE_URL is required}"
+mkdir -p artifacts/quality/zap
+exec docker run --rm --network host \
+  -v "$PWD/artifacts/quality/zap:/zap/wrk/:rw" \
+  "$IMAGE" zap-baseline.py -t "$E2E_BASE_URL" -J zap.json -r zap.html "$@"

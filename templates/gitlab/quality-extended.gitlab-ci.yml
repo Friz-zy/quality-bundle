@@ -1,0 +1,37 @@
+e2e-performance:
+  stage: test
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm
+  before_script:
+    - git submodule update --init --recursive
+  script:
+    - QUALITY_EXTRAS=performance ./tools/quality/bin/performance
+  artifacts:
+    when: always
+    paths: [artifacts/quality/]
+    reports:
+      junit: artifacts/quality/performance-junit.xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - when: manual
+
+e2e-accessibility:
+  stage: test
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm
+  before_script:
+    - git submodule update --init --recursive
+    - ./tools/quality/bin/install-ui chromium
+  script:
+    - ./tools/quality/bin/accessibility
+  artifacts:
+    when: always
+    paths: [artifacts/quality/]
+
+e2e-security:
+  stage: test
+  image: ghcr.io/zaproxy/zaproxy:stable
+  script:
+    - mkdir -p artifacts/quality/zap
+    - zap-baseline.py -t "$E2E_BASE_URL" -J artifacts/quality/zap/zap.json -r artifacts/quality/zap/zap.html
+  artifacts:
+    when: always
+    paths: [artifacts/quality/zap/]

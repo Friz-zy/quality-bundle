@@ -1,0 +1,35 @@
+name: E2E with rootless Podman runner
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build E2E runner
+        run: docker build -t quality-bundle:ci tools/quality
+      - name: Probe nested rootless Podman
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e E2E_PODMAN_PROBE=1 \
+            quality-bundle:ci \
+            quality doctor
+      - name: Run quality harness
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -v e2e-podman-storage:/home/e2e/.local/share/containers \
+            quality-bundle:ci \
+            quality run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-artifacts
+          path: artifacts/quality
+          if-no-files-found: ignore
