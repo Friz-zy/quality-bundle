@@ -63,7 +63,7 @@ owners/groups can fail or behave differently. Use standard mode for those images
 Mount a named volume at:
 
 ```text
-/home/e2e/.local/share/containers
+/home/podman/.local/share/containers
 ```
 
 to cache pulled images between runs.

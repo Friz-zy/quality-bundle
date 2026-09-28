@@ -60,25 +60,25 @@ COPY bin ./bin
 COPY containers ./containers
 COPY SKILL.md ./
 
-# Rootless runner identity. Standard mode can use these subordinate IDs when the
-# outer runtime exposes the required user-namespace capabilities. Restricted mode
-# does not depend on them and uses VFS + ignore_chown_errors.
-RUN useradd --create-home --uid 1000 --shell /bin/bash e2e \
-    && echo 'e2e:100000:65536' >> /etc/subuid \
-    && echo 'e2e:100000:65536' >> /etc/subgid \
-    && mkdir -p /workspace /home/e2e/.config/containers /home/e2e/.local/share/containers/storage \
-    && chown -R e2e:e2e /workspace /home/e2e /opt/quality-bundle
+# Rootless runner identity. Reuse the base image's pre-created `podman` account
+# (UID/GID 1000, home /home/podman) instead of creating a colliding user; its
+# subordinate ID ranges already exist in /etc/subuid and /etc/subgid. Standard
+# mode can use them when the outer runtime exposes the required user-namespace
+# capabilities. Restricted mode does not depend on them and uses VFS +
+# ignore_chown_errors.
+RUN mkdir -p /workspace /home/podman/.config/containers /home/podman/.local/share/containers/storage \
+    && chown -R podman:podman /workspace /home/podman /opt/quality-bundle
 
-ENV HOME=/home/e2e \
-    XDG_CONFIG_HOME=/home/e2e/.config \
-    XDG_DATA_HOME=/home/e2e/.local/share \
+ENV HOME=/home/podman \
+    XDG_CONFIG_HOME=/home/podman/.config \
+    XDG_DATA_HOME=/home/podman/.local/share \
     XDG_RUNTIME_DIR=/tmp/podman-run-1000 \
     E2E_PODMAN_MODE=restricted \
     E2E_CONTAINER_RUNTIME=podman \
     PATH=/opt/quality-bundle/.venv/bin:/opt/quality-bundle/bin:${PATH}
 
 WORKDIR /workspace
-USER e2e
+USER podman
 
 ENTRYPOINT ["/opt/quality-bundle/containers/entrypoint.sh"]
 CMD ["quality", "doctor"]

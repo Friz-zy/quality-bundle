@@ -24,7 +24,7 @@ jobs:
           docker run --rm \
             -v "$PWD:/workspace" \
             -w /workspace \
-            -v e2e-podman-storage:/home/e2e/.local/share/containers \
+            -v e2e-podman-storage:/home/podman/.local/share/containers \
             quality-bundle:ci \
             quality run
       - uses: actions/upload-artifact@v4

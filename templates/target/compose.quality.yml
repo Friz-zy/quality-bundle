@@ -10,7 +10,7 @@ services:
     working_dir: /workspace
     volumes:
       - ./:/workspace
-      - e2e-podman-storage:/home/e2e/.local/share/containers
+      - e2e-podman-storage:/home/podman/.local/share/containers
     environment:
       QUALITY_CONFIG: /workspace/quality.toml
       E2E_PODMAN_MODE: ${E2E_PODMAN_MODE:-restricted}
@@ -26,7 +26,7 @@ services:
     working_dir: /workspace
     volumes:
       - ./:/workspace
-      - e2e-podman-storage:/home/e2e/.local/share/containers
+      - e2e-podman-storage:/home/podman/.local/share/containers
     environment:
       QUALITY_CONFIG: /workspace/quality.toml
       E2E_PODMAN_MODE: ${E2E_PODMAN_MODE:-restricted}

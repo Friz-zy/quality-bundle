@@ -13,7 +13,7 @@ services:
       # Override E2E_WORKSPACE when the project root is elsewhere.
       - ${E2E_WORKSPACE:-.}:/workspace
       # Persist nested Podman image/layer storage between runs.
-      - podman-storage:/home/e2e/.local/share/containers
+      - podman-storage:/home/podman/.local/share/containers
     environment:
       QUALITY_CONFIG: ${QUALITY_CONFIG:-/workspace/quality.toml}
       E2E_PODMAN_MODE: ${E2E_PODMAN_MODE:-restricted}
@@ -37,7 +37,7 @@ services:
     working_dir: /workspace
     volumes:
       - ${E2E_WORKSPACE:-.}:/workspace
-      - podman-storage:/home/e2e/.local/share/containers
+      - podman-storage:/home/podman/.local/share/containers
     environment:
       QUALITY_CONFIG: ${QUALITY_CONFIG:-/workspace/quality.toml}
       E2E_PODMAN_MODE: ${E2E_PODMAN_MODE:-restricted}

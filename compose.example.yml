@@ -8,7 +8,7 @@ services:
     working_dir: /workspace
     volumes:
       - ./:/workspace
-      - podman-storage:/home/e2e/.local/share/containers
+      - podman-storage:/home/podman/.local/share/containers
     environment:
       QUALITY_CONFIG: /workspace/quality.toml
       E2E_PODMAN_MODE: restricted
