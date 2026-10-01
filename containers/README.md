@@ -16,6 +16,9 @@ Run a capability probe before relying on a new CI runtime:
 podman run --rm quality-bundle /opt/quality-bundle/bin/podman-doctor
 ```
 
+The probe and the diagnostics commands do not require the Podman API socket, so
+they run even when the executor forbids nested user namespaces.
+
 ## Modes
 
 ### restricted

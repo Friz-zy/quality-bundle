@@ -52,9 +52,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 ARG QUALITY_EXTRAS=all
 WORKDIR /opt/quality-bundle
-COPY pyproject.toml README.md LICENSE ./
+COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
-RUN uv sync --no-dev --extra "${QUALITY_EXTRAS}"
+RUN uv sync --locked --no-dev --extra "${QUALITY_EXTRAS}"
 
 COPY bin ./bin
 COPY containers ./containers
