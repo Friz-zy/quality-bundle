@@ -16,6 +16,7 @@ Run without mounting ``/var/run/docker.sock`` and without setting
 test_dood_testcontainers.py.
 """
 import os
+import socket
 import time
 
 import pytest
@@ -38,10 +39,19 @@ def test_nested_mode_targets_internal_podman_socket():
 
 def test_testcontainers_creates_and_removes_container_via_internal_socket():
     client = DockerClient()
-    with generic_container(IMAGE, port=8080, command="sleep 30") as container:
+    with generic_container(IMAGE, port=8080, command="httpd -f -p 8080") as container:
         container_id = container.get_wrapped_container().id
         published = int(container.get_exposed_port(8080))
         assert published > 0
+        for _ in range(20):
+            try:
+                probe = socket.create_connection(("127.0.0.1", published), timeout=2)
+                probe.close()
+                break
+            except OSError:
+                time.sleep(0.5)
+        else:
+            pytest.fail(f"port {published} is not accepting connections")
         result = container.exec(["echo", MARKER])
         assert result.exit_code == 0
         assert MARKER in result.output.decode()
