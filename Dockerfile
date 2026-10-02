@@ -48,7 +48,9 @@ RUN set -eux; \
     rm -rf /tmp/hurl.tar.gz "/tmp/hurl-${HURL_VERSION}-${hurl_arch}-unknown-linux-gnu"
 
 # Install uv without adding another package manager to the target repository.
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+# The version is pinned (tag + digest) to prevent resolver/lock drift: it must
+# match the uv that generated uv.lock.
+COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 /uv /uvx /usr/local/bin/
 
 ARG QUALITY_EXTRAS=all
 WORKDIR /opt/quality-bundle
