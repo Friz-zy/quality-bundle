@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import socket
 from pathlib import Path
 from testcontainers.core.container import DockerContainer
 
@@ -17,9 +18,17 @@ def configure_testcontainers_for_podman() -> str:
     os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
     return docker_host
 
+def _free_host_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
 def generic_container(image: str, port: int | None = None, command: str | None = None) -> DockerContainer:
     configure_testcontainers_for_podman()
     container = DockerContainer(image, command=command)
     if port is not None:
-        container.with_exposed_ports(port)
+        # Podman's compat API does not reliably report auto-assigned (empty-HostPort)
+        # port mappings in nested rootless setups; binding an explicit free host port
+        # is the supported publish form (equivalent to -p HOST:port).
+        container.with_bind_ports(port, _free_host_port())
     return container
