@@ -23,7 +23,11 @@ jobs:
         with:
           persist-credentials: false
       - run: docker build -t quality-bundle:test .
-      - run: docker run --rm quality-bundle:test doctor
+      # WHY --privileged: nested rootless Podman must create user namespaces;
+      # Docker's default seccomp profile denies clone/unshare(CLONE_NEWUSER)
+      # without CAP_SYS_ADMIN, so this smoke run disables seccomp and grants
+      # the capabilities (documented "podman in docker" pattern).
+      - run: docker run --rm --privileged quality-bundle:test quality doctor
       - run: docker save --output /tmp/quality-bundle-image.tar quality-bundle:test
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -62,10 +66,10 @@ jobs:
 
   # Nested rootless Podman: no Docker socket mounted; the entrypoint starts the
   # internal API socket (E2E_PODMAN_SERVICE=1 fails closed if it cannot start)
-  # and the smoke really creates and removes containers through it. The
-  # security options allow creating user namespaces under Docker's defaults;
-  # if a runner forbids them, point this job at a capable self-hosted runner
-  # (see docs/PODMAN-RUNNER.md).
+  # and the smoke really creates and removes containers through it.
+  # --privileged is required for the same reason as in the image job: nested
+  # rootless Podman must create user namespaces, and Docker's default
+  # seccomp/AppArmor confinement denies that on GitHub-hosted runners.
   smoke-nested-podman:
     name: smoke (nested rootless Podman)
     needs: image
@@ -83,9 +87,7 @@ jobs:
       - name: Create and remove containers via internal rootless Podman
         run: |
           docker run --rm \
-            --security-opt seccomp=unconfined \
-            --security-opt apparmor=unconfined \
-            --tmpfs /tmp:exec \
+            --privileged \
             --volume "$PWD/smoke:/workspace/smoke:ro" \
             --env E2E_PODMAN_SERVICE=1 \
             quality-bundle:test \

@@ -11,9 +11,11 @@ jobs:
           submodules: recursive
       - name: Build E2E runner
         run: docker build -t quality-bundle:ci tools/quality
+      # GitHub-hosted runners require --privileged for nested rootless Podman:
+      # default seccomp/AppArmor confinement denies the user-namespace clone.
       - name: Probe nested rootless Podman
         run: |
-          docker run --rm \
+          docker run --rm --privileged \
             -v "$PWD:/workspace" \
             -w /workspace \
             -e E2E_PODMAN_PROBE=1 \
@@ -21,7 +23,7 @@ jobs:
             quality doctor
       - name: Run quality harness
         run: |
-          docker run --rm \
+          docker run --rm --privileged \
             -v "$PWD:/workspace" \
             -w /workspace \
             -v e2e-podman-storage:/home/podman/.local/share/containers \
