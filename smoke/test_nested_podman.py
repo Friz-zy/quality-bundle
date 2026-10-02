@@ -38,7 +38,7 @@ def test_nested_mode_targets_internal_podman_socket():
 
 def test_testcontainers_creates_and_removes_container_via_internal_socket():
     client = DockerClient()
-    with generic_container(IMAGE, port=8080) as container:
+    with generic_container(IMAGE, port=8080, command="sleep 30") as container:
         container_id = container.get_wrapped_container().id
         published = int(container.get_exposed_port(8080))
         assert published > 0

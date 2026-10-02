@@ -17,9 +17,9 @@ def configure_testcontainers_for_podman() -> str:
     os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
     return docker_host
 
-def generic_container(image: str, port: int | None = None) -> DockerContainer:
+def generic_container(image: str, port: int | None = None, command: str | None = None) -> DockerContainer:
     configure_testcontainers_for_podman()
-    container = DockerContainer(image)
+    container = DockerContainer(image, command=command)
     if port is not None:
         container.with_exposed_ports(port)
     return container
