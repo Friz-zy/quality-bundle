@@ -13,10 +13,28 @@ def artifacts_dir(e2e_config):
 def app_env(e2e_config):
     with ApplicationEnvironment(e2e_config) as env:yield env
 @pytest.fixture(scope="session")
-def base_url(app_env):return app_env.base_url
+def e2e_base_url(app_env):
+    """Canonical SUT base URL fixture.
+
+    Uniquely named so co-installed plugins (e.g. pytest-base-url, pulled in by
+    pytest-playwright) cannot shadow it; prefer this name in new tests.
+    """
+    return app_env.base_url
+
+@pytest.fixture(scope="session")
+def base_url(e2e_base_url):
+    """DEPRECATED compatibility alias for ``e2e_base_url``.
+
+    The ``base_url`` name collides with pytest-base-url's fixture of the same
+    name; wherever both plugins are installed that fixture may shadow this one.
+    The framework's ``api`` fixture therefore depends on ``e2e_base_url``; new
+    tests should request ``e2e_base_url`` directly.
+    """
+    return e2e_base_url
+
 @pytest.fixture
-def api(base_url):
-    with httpx.Client(base_url=base_url.rstrip("/"),timeout=10) as c:yield c
+def api(e2e_base_url):
+    with httpx.Client(base_url=e2e_base_url.rstrip("/"),timeout=10) as c:yield c
 @pytest.fixture(scope="session")
 def cli(e2e_config):
     if not e2e_config.app.cli:pytest.skip("CLI is not configured")

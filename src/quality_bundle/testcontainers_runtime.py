@@ -1,8 +1,10 @@
 from __future__ import annotations
 import os
-import socket
 from pathlib import Path
 from testcontainers.core.container import DockerContainer
+from testcontainers.core.wait_strategies import PortWaitStrategy
+
+from .runtime import free_host_port
 
 def configure_testcontainers_for_podman() -> str:
     """
@@ -18,11 +20,6 @@ def configure_testcontainers_for_podman() -> str:
     os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
     return docker_host
 
-def _free_host_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return int(s.getsockname()[1])
-
 class PodmanDockerContainer(DockerContainer):
     """DockerContainer whose published host ports are known locally: podman's
     compat API does not reliably report port mappings in nested rootless setups."""
@@ -32,6 +29,15 @@ class PodmanDockerContainer(DockerContainer):
 
     def _get_exposed_port(self, port: int) -> int:
         return self._host_ports[f"{port}/tcp"]
+
+    def get_container_host_ip(self) -> str:
+        # podman's compat `containers list` payload has no HostConfig, so
+        # testcontainers' network_name()/gateway_ip() lookup KeyErrors before a
+        # host is returned. For ports we published explicitly the host is the
+        # local machine; without explicit ports keep stock Docker behavior.
+        if self._host_ports:
+            return "127.0.0.1"
+        return super().get_container_host_ip()
 
 def generic_container(image: str, port: int | None = None, command: str | None = None) -> DockerContainer:
     configure_testcontainers_for_podman()
@@ -44,9 +50,12 @@ def generic_container(image: str, port: int | None = None, command: str | None =
     # podman compat API handles reliably.
     container._kwargs["network"] = "podman"
     if port is not None:
-        free = _free_host_port()
+        free = free_host_port()
         host_ports[f"{port}/tcp"] = free
         # Keep the real bind so the port is actually published (pasta forwards it);
         # only the compat-API introspection of the mapping is skipped above.
         container.with_bind_ports(port, free)
+        # The default wait only checks container status; the published port can
+        # still reset first connections, so wait for it to accept TCP.
+        container.waiting_for(PortWaitStrategy(port))
     return container

@@ -2,4 +2,4 @@
 set -euo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXTRAS="${QUALITY_EXTRAS:-all}"
-exec uv run --project "$KIT" --extra "$EXTRAS" quality-bundle "$@"
+exec uv run --project "$KIT" --extra "$EXTRAS" quality "$@"

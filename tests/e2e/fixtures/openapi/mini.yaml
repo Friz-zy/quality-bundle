@@ -1,0 +1,38 @@
+openapi: 3.0.3
+info:
+  title: Demo SUT
+  version: "1.0"
+servers:
+  - url: http://127.0.0.1:8000
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Health probe
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /api/data:
+    get:
+      operationId: getData
+      summary: Sample data collection
+      responses:
+        "200":
+          description: Data items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: integer

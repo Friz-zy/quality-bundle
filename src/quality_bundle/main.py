@@ -37,7 +37,9 @@ def external_command(name, cfg):
     if name == "schema":
         if not cfg.paths.openapi:
             raise RuntimeError("OpenAPI schema is not configured")
-        args=[sys.executable,"-m","schemathesis","run",cfg.paths.openapi,
+        if not shutil.which("schemathesis"):
+            raise RuntimeError("Schemathesis is not installed")
+        args=[shutil.which("schemathesis"),"run",cfg.paths.openapi,
               "--report","junit","--report-junit-path",str(artifact/"schema-junit.xml")]
         if not cfg.paths.openapi.startswith(("http://","https://")):
             if not cfg.app.base_url:
@@ -67,9 +69,15 @@ def suites_for(cfg, explicit):
 
 def run_quality(cfg_path, explicit, dry_run=False):
     cfg=load_config(cfg_path)
-    names=suites_for(cfg,explicit)
+    try:
+        names=suites_for(cfg,explicit)
+    except RuntimeError as exc:
+        print(f"error: {exc}",file=sys.stderr)
+        return 2
     if not names:
         print("No suites discovered.")
+        if cfg.quality.json_summary:
+            write_summary(Path(cfg.paths.artifacts)/"summary.json",[])
         return 0
     results=[]
     print("Suites:", ", ".join(names))
@@ -97,7 +105,7 @@ def run_quality(cfg_path, explicit, dry_run=False):
         return 0
     if cfg.quality.json_summary:
         write_summary(Path(cfg.paths.artifacts)/"summary.json",results)
-    print("\\nQuality summary")
+    print("\nQuality summary")
     for r in results:
         print(f"{r.suite:16} {r.status:7} {r.duration_seconds:8.3f}s")
     return 0 if all(r.exit_code==0 for r in results) else 1
@@ -121,40 +129,78 @@ def doctor(cp):
         print(f"{k:12} {v}")
     return 0
 
+def split_argv(argv):
+    """Split raw argv before argparse: return (start, cmd) where argv[start] is the
+    subcommand token if it is a suite name or `test`, else None.
+
+    Suite/test subcommands pass everything after them straight to pytest. argparse
+    REMAINDER cannot capture a leading option-like token (`quality cli -k health`
+    used to die with 'unrecognized arguments: -k'), so the token position is found
+    manually and only the head is parsed. Only the leading global --config form is
+    consumed here; flags behind the subcommand stay pytest passthrough.
+    """
+    start = 0
+    if argv and argv[0] == "--config":
+        start = 2 if len(argv) > 1 else 1
+    elif argv and argv[0].startswith("--config="):
+        start = 1
+    cmd = argv[start] if start < len(argv) else None
+    if cmd is not None and not cmd.startswith("-") and (cmd in ALL_SUITES or cmd == "test"):
+        return start, cmd
+    return start, None
+
+
 def main():
-    p=argparse.ArgumentParser(prog="quality")
+    argv = sys.argv[1:]
+    start, cmd = split_argv(argv)
+    if (cmd is None and start < len(argv) and not argv[start].startswith("-")
+            and argv[start] not in ("run", "plan", "list", "doctor", "test")):
+        print(f"error: Unknown suites: {argv[start]}", file=sys.stderr)
+        raise SystemExit(2)
+    p = argparse.ArgumentParser(prog="quality")
     p.add_argument("--config")
-    sub=p.add_subparsers(dest="cmd",required=True)
+    sub = p.add_subparsers(dest="cmd", required=True)
 
-    q=sub.add_parser("run",help="Discover and run configured quality suites")
-    q.add_argument("suites",nargs="*")
-    plan=sub.add_parser("plan",help="Show commands without executing them")
-    plan.add_argument("suites",nargs="*")
-    sub.add_parser("list",help="List discovered suites")
+    q = sub.add_parser("run", help="Discover and run configured quality suites")
+    q.add_argument("suites", nargs="*")
+    plan = sub.add_parser("plan", help="Show commands without executing them")
+    plan.add_argument("suites", nargs="*")
+    sub.add_parser("list", help="List discovered suites")
     sub.add_parser("doctor")
-
     for name in ALL_SUITES:
-        x=sub.add_parser(name); x.add_argument("extra",nargs=argparse.REMAINDER)
-    t=sub.add_parser("test");t.add_argument("extra",nargs=argparse.REMAINDER)
+        sub.add_parser(name)  # registered for --help/choices; dispatched manually above
+    sub.add_parser("test")
 
-    a=p.parse_args();cfg=load_config(a.config)
-    if a.cmd=="doctor": code=doctor(a.config)
-    elif a.cmd=="list":
-        print("\\n".join(discover(cfg)));code=0
-    elif a.cmd=="run":code=run_quality(a.config,a.suites)
-    elif a.cmd=="plan":code=run_quality(a.config,a.suites,True)
-    elif a.cmd=="test":
-        cmd=[sys.executable,"-m","pytest",cfg.paths.tests]
-        if a.config:cmd+=["--e2e-config",a.config]
-        code,_=execute(cmd+a.extra)
+    extra = []
+    if cmd is not None:
+        a, _ = p.parse_known_args(argv[:start + 1])
+        extra = argv[start + 1:]
     else:
-        suite=ALL_SUITES[a.cmd]
+        a = p.parse_args(argv)
+    cfg = load_config(a.config)
+    if cmd == "test":
+        built = [sys.executable, "-m", "pytest", cfg.paths.tests]
+        if a.config:
+            built += ["--e2e-config", a.config]
+        code, _ = execute(built + extra)
+    elif cmd in ALL_SUITES:
+        suite = ALL_SUITES[cmd]
         try:
-            cmd=(pytest_command(cfg,a.config,suite.marker,a.cmd)
-                 if suite.kind=="pytest" else external_command(a.cmd,cfg))
-            code,_=execute(cmd+a.extra)
+            built = (pytest_command(cfg, a.config, suite.marker, cmd)
+                     if suite.kind == "pytest" else external_command(cmd, cfg))
+            code, _ = execute(built + extra)
         except Exception as exc:
-            print(f"error: {exc}",file=sys.stderr);code=2
+            print(f"error: {exc}", file=sys.stderr)
+            code = 2
+    elif a.cmd == "doctor":
+        code = doctor(a.config)
+    elif a.cmd == "list":
+        print("\n".join(discover(cfg)))
+        code = 0
+    elif a.cmd == "run":
+        code = run_quality(a.config, a.suites)
+    else:
+        code = run_quality(a.config, a.suites, True)
     raise SystemExit(code)
 
 if __name__=="__main__":

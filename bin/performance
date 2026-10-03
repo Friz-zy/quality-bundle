@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONFIG="${QUALITY_CONFIG:-e2e.toml}"
+CONFIG="${QUALITY_CONFIG:-quality.toml}"
 LOCUSTFILE="${E2E_PERFORMANCE_FILE:-tests/e2e/performance/locustfile.py}"
 : "${E2E_BASE_URL:?E2E_BASE_URL is required}"
 

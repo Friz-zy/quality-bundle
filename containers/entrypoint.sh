@@ -47,29 +47,35 @@ export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/podman-run-$(id -u)}"
 
+# Writable workspace and kit installation root. Defaults match the built image;
+# entrypoint self-tests redirect them to temporary paths (E2E-SELFTEST-PLAN §11).
+# Values are used only as quoted path prefixes for mkdir/cp below - never eval'd.
+WORKSPACE_DIR="${E2E_WORKSPACE_DIR:-/workspace}"
+KIT_ROOT="${E2E_KIT_ROOT:-/opt/quality-bundle}"
+
 mkdir -p \
   "$XDG_CONFIG_HOME/containers" \
   "$XDG_DATA_HOME/containers/storage" \
   "$XDG_RUNTIME_DIR" \
-  /workspace/artifacts/quality
+  "$WORKSPACE_DIR/artifacts/quality"
 chmod 0700 "$XDG_RUNTIME_DIR"
 
 MODE="${E2E_PODMAN_MODE:-restricted}"
 case "$MODE" in
   restricted)
-    cp /opt/quality-bundle/containers/rootless-vfs/storage.conf "$XDG_CONFIG_HOME/containers/storage.conf"
-    cp /opt/quality-bundle/containers/rootless-vfs/containers.conf "$XDG_CONFIG_HOME/containers/containers.conf"
+    cp "$KIT_ROOT/containers/rootless-vfs/storage.conf" "$XDG_CONFIG_HOME/containers/storage.conf"
+    cp "$KIT_ROOT/containers/rootless-vfs/containers.conf" "$XDG_CONFIG_HOME/containers/containers.conf"
     ;;
   standard)
-    cp /opt/quality-bundle/containers/rootless-standard/storage.conf "$XDG_CONFIG_HOME/containers/storage.conf"
-    cp /opt/quality-bundle/containers/rootless-standard/containers.conf "$XDG_CONFIG_HOME/containers/containers.conf"
+    cp "$KIT_ROOT/containers/rootless-standard/storage.conf" "$XDG_CONFIG_HOME/containers/storage.conf"
+    cp "$KIT_ROOT/containers/rootless-standard/containers.conf" "$XDG_CONFIG_HOME/containers/containers.conf"
     ;;
   *)
     echo "error: E2E_PODMAN_MODE must be restricted or standard" >&2
     exit 2
     ;;
 esac
-cp /opt/quality-bundle/containers/rootless-vfs/registries.conf "$XDG_CONFIG_HOME/containers/registries.conf"
+cp "$KIT_ROOT/containers/rootless-vfs/registries.conf" "$XDG_CONFIG_HOME/containers/registries.conf"
 
 
 # Expose Podman's Docker-compatible API only when the invoked command needs it.
@@ -99,7 +105,7 @@ if [[ "$SERVICE_MODE" != "skip" ]]; then
 fi
 
 if [[ "${E2E_PODMAN_PROBE:-0}" == "1" ]]; then
-  /opt/quality-bundle/bin/podman-doctor
+  "$KIT_ROOT/bin/podman-doctor"
 fi
 
 exec "$@"

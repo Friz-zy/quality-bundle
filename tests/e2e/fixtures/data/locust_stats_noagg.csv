@@ -1,0 +1,2 @@
+Type,Name,Request Count,Failure Count,Requests/s,Average Response Time,Min Response Time,Max Response Time,Average Content Size,50%,95%,99%,Current RPS,Current Failures/s
+GET,/api/data,1000,5,120.5,85.2,12.1,410.0,128.0,40,180,350,120.5,0.3

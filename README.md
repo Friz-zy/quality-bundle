@@ -89,7 +89,7 @@ Two runtime modes are supported:
 
 ```text
 tools/quality/                 # pinned submodule
-e2e.toml
+quality.toml
 tests/e2e/
   conftest.py              # optional project fixtures only
   cli/
@@ -100,14 +100,16 @@ tests/e2e/
   ui/
   mobile/
   grpc/
+  contract/
+  containers/
 ```
 
 Do not copy shared fixtures into the target repository. Extend them only when the project
 needs project-specific authentication, data factories, capabilities or selectors.
 
 ## CI templates
-- `templates/github/e2e.yml`
-- `templates/gitlab/e2e.gitlab-ci.yml`
+- `templates/github/quality.yml`, `quality-core.yml`, `quality-extended.yml`, `quality-podman-runner.yml`
+- `templates/gitlab/quality.gitlab-ci.yml`, `quality-core.gitlab-ci.yml`, `quality-extended.gitlab-ci.yml`, `quality-podman-runner.gitlab-ci.yml`
 
 They are templates, not drop-in assumptions: the target repository must provide its build/start
 step and environment variables. GitHub checks out submodules recursively; GitLab explicitly
@@ -146,7 +148,7 @@ The toolkit also provides intentionally separate quality phases:
 
 | Phase | Tool | Runner | Recommended cadence |
 |---|---|---|---|
-| Performance smoke/load | k6 | `bin/performance` | PR smoke + scheduled load |
+| Performance smoke/load | Locust (k6 optional) | `bin/performance` (`bin/k6`) | PR smoke + scheduled load |
 | Accessibility | axe + Playwright | `bin/accessibility` | PR for UI changes |
 | Dynamic security | OWASP ZAP baseline | `bin/security` | scheduled + pre-release |
 | Toolkit container | Docker | `Dockerfile` | reusable CI image |
@@ -260,6 +262,7 @@ tests/e2e/
   cli/             fast public CLI behavior
   api/             explicit HTTP behavior
   contract/        hand-written contracts where useful
+  containers/      container-backed checks (Testcontainers)
   workflows/       cross-interface business flows
   hurl/            declarative HTTP scenarios
   bdd/             business-readable scenarios
@@ -360,10 +363,26 @@ See `docs/PODMAN-RUNNER.md` for limitations and the standard/restricted modes.
 
 ### Container runtime compatibility
 
-`testcontainers` is no longer a core dependency. The built-in runtime path uses Podman CLI
-directly, which is what allows the self-contained runner to avoid a host Docker socket.
-A `legacy-testcontainers` optional dependency profile remains available for project-specific
-tests that still need the upstream Testcontainers Python API.
+`testcontainers` is a core dependency (see `pyproject.toml`), accessed through the nested
+rootless Podman socket. The built-in runtime path uses the Podman CLI directly, which is what
+allows the self-contained runner to avoid a host Docker socket.
+
+`PodmanRuntime` publishes ports reliably in nested/rootless setups: publishing containers attach
+the stock `podman` bridge network, because the engine default can be a host-style network where
+`-p` publishing is silently ignored. Explicit host ports pass through verbatim; an unset host
+port is replaced with a preallocated free ephemeral host port (several Podman builds reject
+dynamic `-p 0:PORT`). Runtime operations are bounded by timeouts: 120 s per command by default,
+600 s for `run`, 900 s for `pull`/`build`.
+
+### Entrypoint configuration knobs
+
+The runner container entrypoint accepts these environment variables with preserved defaults:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `E2E_WORKSPACE_DIR` | `/workspace` | Writable workspace directory created inside the container. |
+| `E2E_KIT_ROOT` | `/opt/quality-bundle` | Toolkit installation root inside the image. |
+| `E2E_PODMAN_TIMEOUT` | `120` | Positive integer seconds bounding each `bin/podman-doctor` probe call; without the `timeout` utility the doctor fails closed instead of running podman unbounded. |
 
 
 ## Testcontainers + nested Podman
@@ -387,9 +406,28 @@ kill/restart/fault lifecycle control.
 Use Testcontainers for normal ephemeral dependencies and its existing service modules. Use the
 native adapter when a test specifically needs lower-level Podman lifecycle behavior.
 
+### Pytest fixtures
+
+The auto-loaded plugin registers these fixtures:
+
+- `e2e_base_url` (session) — canonical SUT base URL resolved from configuration/environment;
+  the `api` fixture builds its `httpx` client from it.
+- `base_url` (session) — deprecated backwards-compatible alias for `e2e_base_url`. The name
+  collides with the `base_url` fixture registered by `pytest-base-url` (pulled in by
+  `pytest-playwright`), so wherever both plugins are installed the alias can be shadowed.
+  Migrate tests to `e2e_base_url`; the `api` fixture already depends on it internally.
+- `e2e_config` (session) — the loaded `quality.toml` configuration.
+- `artifacts_dir` (session) — creates and returns the artifacts directory.
+- `app_env` (session) — application environment lifecycle (SUT startup/teardown in image mode).
+- `cli` (session) — CLI runner for `app.cli`; skips when the CLI is not configured.
+- `container_runtime` (session) — native Podman CLI adapter for explicit lifecycle/fault operations.
+- `testcontainers_podman` (session) — points Testcontainers at the nested rootless Podman socket.
+- `compatibility_artifacts` (session) — compatibility artifacts resolved from the configured versions.
+- `toxiproxy` (session) — isolated Toxiproxy container for fault-injection tests.
+
 ### Docker Compose
 
-A complete runner compose file is included as `docker-compose.yml`.
+A complete runner compose file is included as `compose.quality.yml`.
 
 From the toolkit repository:
 

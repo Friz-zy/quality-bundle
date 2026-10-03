@@ -24,6 +24,8 @@ PYTEST_SUITES = {
     "realtime": Suite("realtime", "pytest", "realtime", extra="realtime"),
     "compatibility": Suite("compatibility", "pytest", "compatibility"),
     "reliability": Suite("reliability", "pytest", "reliability", extra="reliability"),
+    "contract": Suite("contract", "pytest", "contract"),
+    "container": Suite("container", "pytest", "container"),
 }
 EXTERNAL_SUITES = {
     "hurl": Suite("hurl", "external", external="hurl"),
@@ -36,7 +38,7 @@ ALL_SUITES = {**PYTEST_SUITES, **EXTERNAL_SUITES}
 def discover(config: E2EConfig) -> list[str]:
     base = Path(config.paths.tests)
     found: list[str] = []
-    aliases = {"workflow": "workflows", "schema": None}
+    aliases = {"workflow": "workflows", "schema": None, "container": "containers"}
     for name in PYTEST_SUITES:
         directory = base / aliases.get(name, name)
         if directory.exists() and any(directory.rglob("test_*.py")):
@@ -45,7 +47,8 @@ def discover(config: E2EConfig) -> list[str]:
         found.append("hurl")
     if config.paths.openapi:
         found.append("schema")
-    if (base / "performance").exists() and any((base / "performance").glob("*.js")):
+    perf=base/"performance"
+    if perf.exists() and (any(perf.glob("locustfile.py")) or any(perf.glob("*.js"))):
         found.append("performance")
     if (base / "security").exists():
         found.append("security")

@@ -1,5 +1,44 @@
 #!/usr/bin/env bash
+# Rootless podman capability doctor for e2e environments.
+#
+# Every podman invocation is bounded by E2E_PODMAN_TIMEOUT (positive integer
+# seconds, default 120) via the `timeout` utility. Without `timeout` the doctor
+# fails closed instead of running podman unbounded.
 set -uo pipefail
+
+# Default when UNSET only: an explicitly empty value must be rejected below.
+timeout_secs="${E2E_PODMAN_TIMEOUT-120}"
+case "$timeout_secs" in
+  '' | *[!0-9]* | 0)
+    echo "FAIL: E2E_PODMAN_TIMEOUT must be a positive integer number of seconds (got '${E2E_PODMAN_TIMEOUT-}')" >&2
+    exit 1
+    ;;
+esac
+
+if ! command -v timeout >/dev/null 2>&1; then
+  echo "FAIL: 'timeout' utility is not available; refusing to run podman unbounded (wanted E2E_PODMAN_TIMEOUT=${timeout_secs}s per command)" >&2
+  exit 1
+fi
+
+# Bounded podman: every call runs under `timeout`; a killed call is diagnosed.
+podman_bounded() {
+  timeout "$timeout_secs" podman "$@"
+  local rc=$?
+  if [[ "$rc" -eq 124 ]]; then
+    echo "FAIL: 'podman $*' exceeded E2E_PODMAN_TIMEOUT=${timeout_secs}s" >&2
+  fi
+  return "$rc"
+}
+
+cid=""
+cleanup() {
+  # Best-effort and bounded: teardown must never hang the doctor either.
+  if [[ -n "$cid" ]]; then
+    timeout "$timeout_secs" podman rm -f "$cid" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+trap 'exit 1' INT TERM
 
 echo "== Identity =="
 id
@@ -8,27 +47,77 @@ echo "== Namespace =="
 grep -E 'Cap(Prm|Eff|Bnd)|NoNewPrivs|Seccomp' /proc/self/status || true
 echo
 echo "== Podman =="
-podman version || exit 1
-podman info --debug || exit 1
+podman_bounded version || exit 1
+podman_bounded info --debug || exit 1
 echo
 echo "== Storage =="
-podman info --format 'driver={{.Store.GraphDriverName}} graphRoot={{.Store.GraphRoot}}' || true
+podman_bounded info --format 'driver={{.Store.GraphDriverName}} graphRoot={{.Store.GraphRoot}}' || true
 echo
 echo "== Rootless container probe =="
-if podman run --rm docker.io/library/busybox:latest sh -c 'echo nested-podman-ok; id'; then
-  echo "PASS: container run"
-else
+if ! run_out="$(podman_bounded run --rm docker.io/library/busybox:latest sh -c 'echo nested-podman-ok; id')"; then
   echo "FAIL: container run"
   exit 1
 fi
+if [[ "$run_out" != *nested-podman-ok* ]]; then
+  echo "FAIL: container run (sentinel missing from output: ${run_out:-<empty>})"
+  exit 1
+fi
+echo "$run_out"
+echo "PASS: container run"
 echo
 echo "== Port publishing probe =="
-cid="$(podman run -d --rm -p 0:8080 docker.io/library/busybox:latest sh -c 'httpd -f -p 8080')"
-trap 'podman rm -f "$cid" >/dev/null 2>&1 || true' EXIT
-podman port "$cid" 8080 || exit 1
-echo "PASS: port publishing"
+# Dynamic host ports (-p 0:PORT) are rejected by several podman builds; publish an
+# explicitly allocated free port instead, on the stock bridge network ("podman").
+# This mirrors PodmanRuntime's publishing path: in nested/rootless setups the
+# engine default can be a host-style network where -p is silently ignored.
+port="$(python3 -c 'import socket
+with socket.socket() as s:
+    s.bind(("127.0.0.1", 0))
+    print(s.getsockname()[1])')" || { echo "FAIL: port publishing (free host port allocation)"; exit 1; }
+if ! cid="$(podman_bounded run -d --rm --network podman -p "${port}:8080" docker.io/library/busybox:latest sh -c 'httpd -f -p 8080')"; then
+  echo "FAIL: port publishing (container start)"
+  exit 1
+fi
+if ! mapping="$(podman_bounded port "$cid" 8080)"; then
+  echo "FAIL: port publishing (port query)"
+  exit 1
+fi
+echo "$mapping"
+# Validate the mapping the way PodmanRuntime parses it: the first non-empty line is
+# host:port (host may be bracketed IPv6). An empty or malformed mapping means the
+# publication did not happen; never report PASS without a real host:port pair that
+# resolves to the allocated host port, and confirm the probe container still runs.
+first_line="$(printf '%s\n' "$mapping" | awk 'NF {print; exit}')"
+mapping_host=""
+mapping_port=""
+if [[ -n "$first_line" ]]; then
+  mapping_host="${first_line%:*}"
+  mapping_port="${first_line##*:}"
+  mapping_host="${mapping_host#[}"
+  mapping_host="${mapping_host%]}"
+fi
+if [[ -z "$mapping_host" || ! "$mapping_port" =~ ^[0-9]+$ || "$mapping_port" -lt 1 || "$mapping_port" -gt 65535 ]]; then
+  echo "FAIL: port publishing (unexpected 'podman port' output: ${first_line:-<empty>})"
+  exit 1
+fi
+if [[ "$mapping_port" != "$port" ]]; then
+  echo "FAIL: port publishing (mapped host port ${mapping_port} != allocated ${port})"
+  exit 1
+fi
+if ! running="$(podman_bounded inspect --format '{{.State.Running}}' "$cid")" || [[ "$running" != *true* ]]; then
+  echo "FAIL: port publishing (probe container is not running: ${running:-<empty>})"
+  exit 1
+fi
+echo "PASS: port publishing (${mapping_host}:${mapping_port} -> container 8080)"
 echo
 echo "== Volume probe =="
-podman run --rm -v e2e-doctor:/data docker.io/library/busybox:latest sh -c 'echo ok >/data/probe && cat /data/probe' || exit 1
-podman volume rm -f e2e-doctor >/dev/null || true
+if ! vol_out="$(podman_bounded run --rm -v e2e-doctor:/data docker.io/library/busybox:latest sh -c 'echo ok >/data/probe && cat /data/probe')"; then
+  echo "FAIL: volume"
+  exit 1
+fi
+if [[ "$vol_out" != "ok" ]]; then
+  echo "FAIL: volume (probe file round-trip returned: ${vol_out:-<empty>})"
+  exit 1
+fi
+podman_bounded volume rm -f e2e-doctor >/dev/null || true
 echo "PASS: volume"

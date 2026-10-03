@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE="${E2E_COMPOSE_FILE:-$KIT/docker-compose.yml}"
+COMPOSE="${E2E_COMPOSE_FILE:-$KIT/compose.quality.yml}"
 ENGINE="${E2E_COMPOSE_ENGINE:-docker}"
 
 case "$ENGINE" in
