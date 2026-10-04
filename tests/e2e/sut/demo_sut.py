@@ -66,8 +66,8 @@ class DemoSUTHandler(BaseHTTPRequestHandler):
             self._json(500, {"error": "boom"})
         elif path == "/a11y":
             self._html(200, "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
-                            "<title>Demo SUT</title></head><body><h1>Demo</h1>"
-                            "<button id=\"go\" type=\"button\">Go</button></body></html>\n")
+                            "<title>Demo SUT</title></head><body><main><h1>Demo</h1>"
+                            "<button id=\"go\" type=\"button\">Go</button></main></body></html>\n")
         else:
             self._json(404, {"error": "not found", "path": path})
 
