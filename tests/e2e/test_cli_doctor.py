@@ -2,6 +2,8 @@
 
 E2E-001 pins doctor always exits 0 (intentional behavior, see CHARACTERIZATION.md).
 """
+import shutil
+
 import pytest
 
 DOCTOR_KEYS = ["python", "hurl", "k6", "docker", "podman", "tests",
@@ -20,7 +22,10 @@ def test_e2e_001_doctor_pins_11_keys_and_exit_0(invoke_cli, make_project, tmp_pa
     lines = r.stdout.splitlines()
     assert [line.split(None, 1)[0] for line in lines] == DOCTOR_KEYS
     d = doctor_map(r)
-    assert d["hurl"] == "not installed"
+    # doctor must reflect actual Hurl availability. invoke_cli inherits this
+    # process's PATH (only E2E_*/QUALITY_* are scrubbed), so the expected value
+    # is derived from that same PATH; CI installs Hurl 8.0.1 and reports its path.
+    assert d["hurl"] == (shutil.which("hurl") or "not installed")
     assert d["k6"] == "not installed"
     assert d["tests"] == "tests/e2e"
     assert d["cli"] == "not configured"

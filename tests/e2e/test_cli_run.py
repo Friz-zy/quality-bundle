@@ -4,7 +4,7 @@ Artifact convention: QUALITY_ARTIFACTS_DIR points at an absolute tmp dir; summar
 and <suite>-junit.xml land DIRECTLY under it (verified behavior of write_summary +
 pytest_command).
 """
-import json, re, shutil
+import json, re
 import pytest
 
 FAILING_BODY = "def test_cli_fail():\n    assert False\n"
@@ -99,11 +99,12 @@ def test_e2e_018_single_suite_remainder_passthrough(invoke_cli, make_project, tm
     assert "1 passed" in r.stdout and "1 deselected" in r.stdout
 
 
-@pytest.mark.skipif(shutil.which("hurl") is not None,
-                    reason="hurl is installed; the absent-binary error path cannot be exercised")
 def test_e2e_019_hurl_without_binary_exit_2(invoke_cli, make_project, tmp_path):
+    # Isolated missing-binary probe: an empty PATH hides a globally installed hurl.
+    empty_path = tmp_path / "empty-path"
+    empty_path.mkdir()
     root = make_project(tmp_path, {"cli": []})
-    r = invoke_cli(["hurl"], cwd=root)
+    r = invoke_cli(["hurl"], cwd=root, env_overrides={"PATH": str(empty_path)})
     assert r.returncode == 2
     assert r.stderr.strip() == "error: Hurl is not installed"
 

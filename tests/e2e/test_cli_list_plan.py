@@ -50,18 +50,18 @@ def test_e2e_008_exclude_suites(invoke_cli, make_project, tmp_path, mode):
     assert r.stdout.splitlines() == ["cli"]
 
 
-@pytest.mark.parametrize("with_hurl", [
-    False,
-    pytest.param(True, marks=pytest.mark.skipif(
-        shutil.which("hurl") is not None,
-        reason="hurl is installed; the absent-binary error path cannot be exercised")),
-])
+@pytest.mark.parametrize("with_hurl", [False, True])
 def test_e2e_009_plan_commands_and_hurl_error(invoke_cli, make_project, tmp_path, with_hurl):
     root = make_project(tmp_path, {"cli": [], "api": []})
+    env_overrides = None
     if with_hurl:
         (root / "tests/e2e/hurl").mkdir()
         (root / "tests/e2e/hurl/health.hurl").write_text("GET http://127.0.0.1/health\n")
-    r = invoke_cli(["plan"], cwd=root)
+        # Isolated missing-binary probe: an empty PATH hides a globally installed hurl.
+        empty_path = tmp_path / "empty-path"
+        empty_path.mkdir()
+        env_overrides = {"PATH": str(empty_path)}
+    r = invoke_cli(["plan"], cwd=root, env_overrides=env_overrides)
     assert r.returncode == 0
     assert r.stdout.splitlines()[0] == "Suites: cli, api" + (", hurl" if with_hurl else "")
     assert "-m cli" in r.stdout and "-m api" in r.stdout

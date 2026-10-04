@@ -7,12 +7,93 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-      - run: uv run pytest tests
+      # Locked sync from the committed uv.lock: nested wrappers using --extra all
+      # then reuse these versions instead of resolving or updating packages.
+      - run: uv sync --locked --extra all
+      # System packages land only on the disposable GitHub runner.
+      - run: uv run --locked --extra all playwright install --with-deps chromium
+      # Official immutable release artifact, checksum-pinned, extracted with
+      # dpkg-deb -x (never dpkg -i, so no package maintainer scripts run).
+      - name: Install Hurl 8.0.1 from the official release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          deb="$RUNNER_TEMP/hurl_8.0.1_amd64.deb"
+          expected_sha256='e76e6c0957f83f9b761416452871554d0f068384b6cd004bff82dd8795c62225'
+
+          curl --fail --location --proto '=https' --proto-redir '=https' \
+            --output "$deb" \
+            https://github.com/Orange-OpenSource/hurl/releases/download/8.0.1/hurl_8.0.1_amd64.deb
+
+          # Fail closed before extraction on any checksum mismatch.
+          echo "$expected_sha256  $deb" > "$deb.sha256"
+          sha256sum --check --strict "$deb.sha256"
+
+          hurl_root="$RUNNER_TEMP/hurl"
+          dpkg-deb -x "$deb" "$hurl_root"
+          hurl_bin="$hurl_root/usr/bin"
+
+          # hurl --version prints multi-line output; the first line starts with
+          # "hurl 8.0.1" followed by host/libcurl build info.
+          hurl_version="$("$hurl_bin/hurl" --version)"
+          printf '%s\n' "$hurl_version"
+          case "$hurl_version" in
+            hurl\ 8.0.1*) ;;
+            *)
+              echo "::error::hurl --version does not report 8.0.1" >&2
+              exit 1
+              ;;
+          esac
+
+          for binary in "$hurl_bin"/*; do
+            if ldd "$binary" 2>&1 | grep -- 'not found'; then
+              echo "::error::$binary has unresolved shared libraries" >&2
+              exit 1
+            fi
+          done
+
+          # Expose hurl/hurlfmt to later steps only.
+          echo "$hurl_bin" >> "$GITHUB_PATH"
+      - name: Dependency preflight (fail fast before pytest)
+        run: |
+          uv run --locked --extra all python - <<'PY'
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          import axe_playwright_python  # noqa: F401
+          import locust  # noqa: F401
+          import playwright  # noqa: F401
+          import schemathesis  # noqa: F401
+          import websockets  # noqa: F401
+          from playwright.sync_api import sync_playwright
+
+          with sync_playwright() as p:
+              chromium = Path(p.chromium.executable_path)
+          if not chromium.is_file():
+              sys.exit(f"preflight failed: Playwright Chromium executable missing at {chromium}")
+
+          try:
+              hurl_version = subprocess.run(
+                  ["hurl", "--version"], capture_output=True, text=True, check=True
+              ).stdout.splitlines()[0]
+          except (OSError, IndexError, subprocess.CalledProcessError) as exc:
+              sys.exit(f"preflight failed: cannot run hurl --version: {exc}")
+          if not re.match(r"hurl 8\.0\.1(?:\s|$)", hurl_version):
+              sys.exit(f"preflight failed: unexpected hurl version: {hurl_version}")
+
+          print(f"preflight ok: chromium={chromium}")
+          print(f"preflight ok: hurl={hurl_version}")
+          PY
+      - run: uv run --locked --extra all pytest tests
 
   # Build once so both smoke jobs exercise the exact same image.
   image:
